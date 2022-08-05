@@ -1,4 +1,6 @@
 version: 2.1
+orbs:
+  slack: circleci/slack@4.1
 
 jobs:
   build-frontend:
@@ -93,6 +95,28 @@ jobs:
             # npm audit --audit-level=critical
             npm audit fix --audit-level=critical --force
 
+  notify:
+    docker:
+      - image: 'cimg/base:stable'
+    steps:
+      - slack/notify:
+          custom: |
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "plain_text",
+                      "text": "*This is a text notification*",
+                      "emoji": true
+                    }
+                  ]
+                }
+              ]
+            }
+          event: always
+
 workflows:
   default:
     jobs:
@@ -106,4 +130,9 @@ workflows:
           requires: [build-backend]
       - scan-frontend:
           requires: [build-frontend]
+
+  send-notification:
+    jobs:
+      - notify:
+          context: huylq-context
   
