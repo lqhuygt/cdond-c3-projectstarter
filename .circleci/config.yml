@@ -167,7 +167,6 @@ jobs:
       - checkout
       - add_ssh_keys:
           fingerprints: ['50:a9:54:ba:de:9c:47:08:2b:d5:6e:1f:8e:11:28:af:1d:c8:0f:46']
-
       - attach_workspace:
           at: .circleci/ansible
 
@@ -209,6 +208,67 @@ jobs:
                 curl https://kvdb.io/XBw7Q4RQSmfAekgsdEGW8U/migration_${CIRCLE_WORKFLOW_ID:0:7}  -d '1'
             fi
 
+  deploy-frontend:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            yum install sudo -y
+            curl -sL https://rpm.nodesource.com/setup_10.x | sudo bash -
+            yum install nodejs -y
+            node --version
+            npm --version
+            yum install tar -y
+            yum install gzip -y
+      - run:
+          name: Get backend url
+          command: |
+            export BACKEND_IP=$(aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --output text)
+            export API_URL="http://${BACKEND_IP}:3030"
+            echo API_URL="http://${BACKEND_IP}:3030" >> "frontend/.env"
+            cat frontend/.env
+      - run:
+          name: Deploy frontend objects
+          command: |
+            cd frontend
+            npm install
+            npm run build
+            tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
+            aws s3 cp dist s3://huylq-${CIRCLE_WORKFLOW_ID:0:7} --recursive
+
+  deploy-backend:
+    docker:
+      - image: python:3.7-alpine3.11
+    steps:
+      - checkout
+      - add_ssh_keys:
+          fingerprints: ['50:a9:54:ba:de:9c:47:08:2b:d5:6e:1f:8e:11:28:af:1d:c8:0f:46']
+      - attach_workspace:
+          at: .circleci/ansible
+      - run:
+          name: Install dependencies
+          command: |
+            apk add ansible
+            apk add curl
+            pip3 install awscli
+      - run:
+          name: Deploy backend
+          command: |
+            cd backend
+            npm i
+            npm run build
+            cd ..
+            tar -C backend -czvf artifact.tar.gz .
+            cd .circleci/ansible
+            echo "Contents  of the inventory.txt file is -------"
+            cat inventory.txt
+            ansible-playbook -i inventory.txt deploy-backend.yml
+
 workflows:
   default:
     jobs:
@@ -228,5 +288,9 @@ workflows:
           requires: [deploy-infrastructure]
       - run-migrations:
           requires: [configure-infrastructure]
-          
+      - deploy-frontend:
+          requires: [run-migrations]
+      - deploy-backend:
+          requires: [run-migrations]
+
   
