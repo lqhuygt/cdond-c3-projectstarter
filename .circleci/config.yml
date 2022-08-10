@@ -259,10 +259,22 @@ jobs:
       - run:
           name: Deploy backend
           command: |
-            tar -C backend -czvf artifact.tar.gz .
+            echo PWD $(pwd)
+            echo ENVIRONMENT=production >> "backend/.env"
+            echo NODE_ENV=production >> "backend/.env"
+            echo TYPEORM_CONNECTION=postgres >> "backend/.env"
+            echo TYPEORM_MIGRATIONS_DIR=./src/migrations >> "backend/.env"
+            echo TYPEORM_ENTITIES=./src/modules/domain/**/*.entity.ts >> "backend/.env"
+            echo TYPEORM_MIGRATIONS=./src/migrations/*.ts >> "backend/.env"
+            echo TYPEORM_HOST=$TYPEORM_HOST >> "backend/.env"
+            echo TYPEORM_PORT=$TYPEORM_PORT >> "backend/.env"
+            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> "backend/.env"
+            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> "backend/.env"
+            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> "backend/.env"
+            cat backend/.env
             cd .circleci/ansible
-            echo "Contents  of the inventory.txt file is -------"
-            cat inventory.txt
+            BACKEND_IP=`cat inventory.txt | head -2 | tail -1`
+            echo "BACKEND_IP: ${BACKEND_IP}"
             ansible-playbook -i inventory.txt deploy-backend.yml
 
   smoke-test:
