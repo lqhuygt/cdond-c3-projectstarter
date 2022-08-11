@@ -243,39 +243,37 @@ jobs:
 
   deploy-backend:
     docker:
-      - image: python:3.7-alpine3.11
+      - image: cimg/python:3.10.0-node
+        user: root
     steps:
       - checkout
       - add_ssh_keys:
           fingerprints: ['50:a9:54:ba:de:9c:47:08:2b:d5:6e:1f:8e:11:28:af:1d:c8:0f:46']
       - attach_workspace:
-          at: .circleci/ansible
+          at:  ~/
       - run:
-          name: Install dependencies
+          name: install dependencies
           command: |
-            apk add --update curl nodejs npm
-            apk add --update ansible zip
-            apk add --update openssh-client tar gzip
+            sudo apt update
+            sudo apt install software-properties-common
+            sudo add-apt-repository --yes --update ppa:ansible/ansible
+            sudo apt install ansible
             pip install awscli
       - run:
-          name: Package backend
+          name: build backend dist
           command: |
             cd backend
-            npm install typescript@latest -g
             npm install
             npm run build
-            tar -czf artifact.tar.gz dist/* package*
             cd ..
-            cp backend/artifact.tar.gz .circleci/ansible/roles/deploy/files
+            # Zip the directory
+            tar -C backend -czvf ~/artifact.tar.gz .
       - run:
           name: Deploy backend
           command: |
-            export TYPEORM_MIGRATIONS_DIR=./migrations
-            export TYPEORM_ENTITIES=./modules/domain/**/*.entity{.ts,.js}
-            export TYPEORM_MIGRATIONS=./migrations/*.ts
             cd .circleci/ansible
+            echo "Contents  of the inventory.txt file is -------"
             cat inventory.txt
-            export ANSIBLE_HOST_KEY_CHECKING=False
             ansible-playbook -i inventory.txt deploy-backend.yml
       - destroy-environment:
           workflow_id: ${CIRCLE_WORKFLOW_ID:0:7}
